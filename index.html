@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual Transmission Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="loading" class="loading-overlay">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div>
+        <div class="loading-title">Loading transmission</div>
+        <div class="loading-subtitle">Preparing the 3D drivetrain...</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="error" class="error-overlay hidden">
+    <div class="error-card">
+      <div class="error-title">Transmission model could not be loaded</div>
+      <div class="error-text">Check <code>models/car_transmission.glb</code> and make sure Live Server is running from the project folder.</div>
+      <pre id="error-detail"></pre>
+    </div>
+  </div>
+
+  <div id="app">
+    <header class="topbar glass">
+      <div>
+        <div class="eyebrow">3D EDUCATIONAL SIMULATOR</div>
+        <h1>Manual Transmission</h1>
+      </div>
+      <div class="status-cluster">
+        <div class="status-pill" id="transmission-status">RUNNING</div>
+        <div class="status-pill neutral" id="clutch-status">CLUTCH ENGAGED</div>
+      </div>
+    </header>
+
+    <aside class="control-panel glass">
+      <section>
+        <div class="section-label">GEAR SELECTOR</div>
+        <div class="gear-grid" id="gear-buttons">
+          <button data-gear="N" class="gear-button active">N</button>
+          <button data-gear="1" class="gear-button">1</button>
+          <button data-gear="2" class="gear-button">2</button>
+          <button data-gear="3" class="gear-button">3</button>
+          <button data-gear="4" class="gear-button">4</button>
+          <button data-gear="5" class="gear-button">5</button>
+          <button data-gear="R" class="gear-button reverse">R</button>
+        </div>
+      </section>
+
+      <section class="telemetry-section">
+        <div class="telemetry-major">
+          <span>Current Gear</span>
+          <strong id="gear-readout">Neutral</strong>
+        </div>
+        <div class="telemetry-grid">
+          <div class="metric"><span>Engine RPM</span><strong id="rpm-readout">3000</strong></div>
+          <div class="metric"><span>Engine Torque</span><strong id="engine-torque">150 Nm</strong></div>
+          <div class="metric"><span>Output Torque</span><strong id="output-torque">0 Nm</strong></div>
+          <div class="metric"><span>Wheel RPM</span><strong id="wheel-rpm">0</strong></div>
+          <div class="metric"><span>Vehicle Speed</span><strong id="speed">0.0 km/h</strong></div>
+          <div class="metric"><span>Power</span><strong id="power">47.1 kW</strong></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="control-row">
+          <div>
+            <div class="section-label">ENGINE RPM</div>
+            <div class="slider-value" id="rpm-slider-value">3000</div>
+          </div>
+        </div>
+        <input id="rpm-slider" class="range" type="range" min="800" max="6000" value="3000" step="50">
+      </section>
+
+      <section>
+        <div class="section-label">CLUTCH</div>
+        <button id="clutch-button" class="wide-button clutch-engaged">CLUTCH: ENGAGED</button>
+        <div class="hint">Press <kbd>C</kbd> to toggle</div>
+      </section>
+
+      <section class="button-row">
+        <button id="pause-button" class="wide-button">PAUSE</button>
+        <button id="reset-button" class="wide-button secondary">RESET</button>
+      </section>
+    </aside>
+
+    <aside class="info-panel glass">
+      <div class="section-label">TRANSMISSION INFO</div>
+      <div class="info-line"><span>Ratio</span><strong id="ratio-readout">—</strong></div>
+      <div class="info-line"><span>Final Drive</span><strong>3.42</strong></div>
+      <div class="divider"></div>
+      <div class="section-label">POWER FLOW</div>
+      <div id="flow-readout" class="flow-readout disconnected">POWER FLOW: DISCONNECTED</div>
+      <div class="hint keyboard-hint">N / 1–5 / R · C clutch · Space pause</div>
+    </aside>
+
+    <div id="canvas-wrap"></div>
+  </div>
+
+  <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
