@@ -49,33 +49,18 @@
     <aside class="control-panel glass">
 
       <!-- GEAR SELECTOR -->
-      <section id="gear-selector-section">
+      <section>
+        <div class="section-label">GEAR SELECTOR</div>
 
-        <div
-          class="section-label"
-          id="gear-selector-toggle"
-          role="button"
-          tabindex="0"
-          aria-expanded="true"
-          aria-controls="gear-selector-content"
-          style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;"
-        >
-          <span>GEAR SELECTOR</span>
-          <span id="gear-selector-arrow" style="font-size:0.8em;">▼</span>
+        <div class="gear-grid" id="gear-buttons">
+          <button data-gear="N" class="gear-button active">N</button>
+          <button data-gear="1" class="gear-button">1</button>
+          <button data-gear="2" class="gear-button">2</button>
+          <button data-gear="3" class="gear-button">3</button>
+          <button data-gear="4" class="gear-button">4</button>
+          <button data-gear="5" class="gear-button">5</button>
+          <button data-gear="R" class="gear-button reverse">R</button>
         </div>
-
-        <div id="gear-selector-content">
-          <div class="gear-grid" id="gear-buttons">
-            <button data-gear="N" class="gear-button active">N</button>
-            <button data-gear="1" class="gear-button">1</button>
-            <button data-gear="2" class="gear-button">2</button>
-            <button data-gear="3" class="gear-button">3</button>
-            <button data-gear="4" class="gear-button">4</button>
-            <button data-gear="5" class="gear-button">5</button>
-            <button data-gear="R" class="gear-button reverse">R</button>
-          </div>
-        </div>
-
       </section>
 
 
@@ -335,52 +320,6 @@
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
     }
   }
-  </script>
-
-  <!-- GEAR SELECTOR COLLAPSE -->
-  <script>
-    const gearSelectorToggle =
-      document.getElementById('gear-selector-toggle');
-
-    const gearSelectorContent =
-      document.getElementById('gear-selector-content');
-
-    const gearSelectorArrow =
-      document.getElementById('gear-selector-arrow');
-
-    function toggleGearSelector() {
-      const isOpen =
-        gearSelectorToggle.getAttribute('aria-expanded') === 'true';
-
-      gearSelectorToggle.setAttribute(
-        'aria-expanded',
-        String(!isOpen)
-      );
-
-      gearSelectorContent.style.display =
-        isOpen ? 'none' : '';
-
-      gearSelectorArrow.textContent =
-        isOpen ? '▶' : '▼';
-    }
-
-    gearSelectorToggle.addEventListener(
-      'click',
-      toggleGearSelector
-    );
-
-    gearSelectorToggle.addEventListener(
-      'keydown',
-      (event) => {
-        if (
-          event.key === 'Enter' ||
-          event.key === ' '
-        ) {
-          event.preventDefault();
-          toggleGearSelector();
-        }
-      }
-    );
   </script>
 
   <!-- MAIN JAVASCRIPT -->

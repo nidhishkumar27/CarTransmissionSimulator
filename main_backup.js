@@ -1,10 +1,16 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
+
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
+
+
 // ============================================================
 // MANUAL TRANSMISSION SIMULATOR - THREE.JS V1
 // ============================================================
-const MODEL_URL = './models/CarTransmission.glb';
+
+const MODEL_URL = './models/car_transmission.glb';
+
 const GEAR_RATIOS = Object.freeze({
   N: 0,
   1: 3.8,
@@ -14,13 +20,16 @@ const GEAR_RATIOS = Object.freeze({
   5: 0.85,
   R: 3.6
 });
+
 const FINAL_DRIVE = 3.42;
 const EFFICIENCY = 0.90;
 const WHEEL_RADIUS_M = 0.34;
 const ENGINE_TORQUE_NM = 150;
+
 const INITIAL_RPM = 3000;
 const MIN_RPM = 800;
 const MAX_RPM = 6000;
+
 const GEAR_NAMES = Object.freeze({
   N: 'Neutral',
   1: '1st',
@@ -30,7 +39,9 @@ const GEAR_NAMES = Object.freeze({
   5: '5th',
   R: 'Reverse'
 });
+
 const FORWARD_GEARS = [1, 2, 3, 4, 5];
+
 const state = {
   gear: 'N',
   targetGear: 'N',
@@ -44,6 +55,7 @@ const state = {
   wheelRPM: 0,
   outputTorque: 0
 };
+
 let scene;
 let camera;
 let renderer;
@@ -51,6 +63,7 @@ let controls;
 let clock;
 let transmissionRoot;
 let loadedModel;
+
 const refs = {
   gear: {},
   gears: {},
@@ -60,20 +73,15 @@ const refs = {
   shafts: {},
   wheels: {},
   diff: null,
-  flowGroup: null,
-  sbw: {
-    actuator: null,
-    actuatorCore: null,
-    actuatorLink: null,
-    selectorRail: null,
-    selectorLinks: {},
-    tcu: null
-  }
+  flowGroup: null
 };
+
 const dom = {};
+
 // ============================================================
 // SHIFT-BY-WIRE / TCU
 // ============================================================
+
 const SBW_ALLOWED_GEARS = Object.freeze([
   'N',
   '1',
@@ -83,16 +91,9 @@ const SBW_ALLOWED_GEARS = Object.freeze([
   '5',
   'R'
 ]);
+
 const SBW_COMMAND_DELAY_MS = 180;
-const SBW_GEAR_OFFSETS = Object.freeze({
-  N: 0,
-  R: -0.30,
-  1: -0.24,
-  2: -0.12,
-  3: 0,
-  4: 0.12,
-  5: 0.24
-});
+
 const sbwState = {
   mode: 'SBW',
   tcuStatus: 'ONLINE',
@@ -107,221 +108,298 @@ const sbwState = {
   eventLog: [],
   maxLogEntries: 12
 };
-const HIGHLIGHT_COLOR =
-  new THREE.Color(0x2eb8ff);
-const REVERSE_HIGHLIGHT_COLOR =
-  new THREE.Color(0xff8f3d);
+
+const HIGHLIGHT_COLOR = new THREE.Color(0x2eb8ff);
+const REVERSE_HIGHLIGHT_COLOR = new THREE.Color(0xff8f3d);
+
 // ============================================================
 // DOM
 // ============================================================
+
 function cacheDom() {
-  dom.loading =
-    document.getElementById('loading');
-  dom.error =
-    document.getElementById('error');
-  dom.errorDetail =
-    document.getElementById('error-detail');
-  dom.canvasWrap =
-    document.getElementById('canvas-wrap');
-  dom.gearReadout =
-    document.getElementById('gear-readout');
-  dom.rpmReadout =
-    document.getElementById('rpm-readout');
-  dom.engineTorque =
-    document.getElementById('engine-torque');
-  dom.outputTorque =
-    document.getElementById('output-torque');
-  dom.wheelRPM =
-    document.getElementById('wheel-rpm');
-  dom.speed =
-    document.getElementById('speed');
-  dom.power =
-    document.getElementById('power');
-  dom.ratio =
-    document.getElementById('ratio-readout');
-  dom.flow =
-    document.getElementById('flow-readout');
-  dom.clutchButton =
-    document.getElementById('clutch-button');
-  dom.clutchStatus =
-    document.getElementById('clutch-status');
-  dom.transmissionStatus =
-    document.getElementById(
-      'transmission-status'
-    );
-  dom.rpmSlider =
-    document.getElementById('rpm-slider');
-  dom.rpmSliderValue =
-    document.getElementById(
-      'rpm-slider-value'
-    );
-  dom.pauseButton =
-    document.getElementById('pause-button');
-  dom.resetButton =
-    document.getElementById('reset-button');
+  dom.loading = document.getElementById('loading');
+  dom.error = document.getElementById('error');
+  dom.errorDetail = document.getElementById('error-detail');
+
+  dom.canvasWrap = document.getElementById('canvas-wrap');
+
+  dom.gearReadout = document.getElementById('gear-readout');
+  dom.rpmReadout = document.getElementById('rpm-readout');
+  dom.engineTorque = document.getElementById('engine-torque');
+  dom.outputTorque = document.getElementById('output-torque');
+  dom.wheelRPM = document.getElementById('wheel-rpm');
+  dom.speed = document.getElementById('speed');
+  dom.power = document.getElementById('power');
+  dom.ratio = document.getElementById('ratio-readout');
+
+  dom.flow = document.getElementById('flow-readout');
+
+  dom.clutchButton = document.getElementById('clutch-button');
+  dom.clutchStatus = document.getElementById('clutch-status');
+
+  dom.transmissionStatus = document.getElementById(
+    'transmission-status'
+  );
+
+  dom.rpmSlider = document.getElementById('rpm-slider');
+  dom.rpmSliderValue = document.getElementById(
+    'rpm-slider-value'
+  );
+
+  dom.pauseButton = document.getElementById('pause-button');
+  dom.resetButton = document.getElementById('reset-button');
+
   dom.gearButtons = [
-    ...document.querySelectorAll(
-      '.gear-button'
-    )
+    ...document.querySelectorAll('.gear-button')
   ];
+
   // Shift-by-wire / TCU
-  dom.sbwMode =
-    document.getElementById('sbw-mode');
-  dom.sbwStatus =
-    document.getElementById('sbw-status');
-  dom.sbwRequested =
-    document.getElementById('sbw-requested');
-  dom.sbwReceived =
-    document.getElementById('sbw-received');
-  dom.sbwValidated =
-    document.getElementById('sbw-validated');
-  dom.sbwActual =
-    document.getElementById('sbw-actual');
-  dom.sbwCommunication =
-    document.getElementById(
-      'sbw-communication'
-    );
-  dom.sbwSecurity =
-    document.getElementById('sbw-security');
-  dom.sbwEventLog =
-    document.getElementById('sbw-event-log');
-  dom.clearFaultButton =
-    document.getElementById(
-      'clear-fault-button'
-    );
+  dom.sbwMode = document.getElementById('sbw-mode');
+  dom.sbwStatus = document.getElementById('sbw-status');
+  dom.sbwRequested = document.getElementById('sbw-requested');
+  dom.sbwReceived = document.getElementById('sbw-received');
+  dom.sbwValidated = document.getElementById('sbw-validated');
+  dom.sbwActual = document.getElementById('sbw-actual');
+  dom.sbwCommunication = document.getElementById(
+    'sbw-communication'
+  );
+  dom.sbwSecurity = document.getElementById('sbw-security');
+  dom.sbwEventLog = document.getElementById('sbw-event-log');
+  dom.clearFaultButton = document.getElementById(
+    'clear-fault-button'
+  );
+
   dom.faultButtons = [
     ...document.querySelectorAll(
       '.fault-button[data-fault]'
     )
   ];
 }
+
 // ============================================================
 // THREE.JS SCENE
 // ============================================================
+
 function initThree() {
+  // ==========================================================
+  // SCENE
+  // ==========================================================
+
   scene = new THREE.Scene();
-  scene.background =
-    new THREE.Color(0x122033);
-  scene.fog =
-    new THREE.Fog(
-      0x122033,
-      42,
-      95
-    );
-  camera =
-    new THREE.PerspectiveCamera(
-      48,
-      window.innerWidth /
-        window.innerHeight,
-      0.1,
-      1000
-    );
+
+  // Brighter studio-style background.
+  scene.background = new THREE.Color(0x122033);
+
+  // Softer fog so distant drivetrain parts don't disappear.
+  scene.fog = new THREE.Fog(
+    0x122033,
+    42,
+    95
+  );
+
+  // ==========================================================
+  // CAMERA
+  // ==========================================================
+
+  camera = new THREE.PerspectiveCamera(
+    48,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+  );
+
+  // Wider framing so the engine + gearbox + differential
+  // are all visible together.
   camera.position.set(
     3.0,
     -31.0,
     19.0
   );
-  renderer =
-    new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false
-    });
+
+  controls = new OrbitControls(
+    camera,
+    renderer?.domElement
+  );
+
+  // ----------------------------------------------------------
+  // RENDERER
+  // ----------------------------------------------------------
+
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false
+  });
+
   renderer.setPixelRatio(
     Math.min(
       window.devicePixelRatio,
       2
     )
   );
+
   renderer.setSize(
     window.innerWidth,
     window.innerHeight
   );
+
   renderer.shadowMap.enabled = true;
+
   renderer.shadowMap.type =
     THREE.PCFSoftShadowMap;
+
   renderer.outputColorSpace =
     THREE.SRGBColorSpace;
+
   renderer.toneMapping =
     THREE.ACESFilmicToneMapping;
+
   renderer.toneMappingExposure = 1.28;
+
   dom.canvasWrap.appendChild(
     renderer.domElement
   );
-  controls =
-    new OrbitControls(
-      camera,
-      renderer.domElement
-    );
+
+  // ==========================================================
+  // ORBIT CONTROLS
+  // ==========================================================
+
+  controls = new OrbitControls(
+    camera,
+    renderer.domElement
+  );
+
   controls.enableDamping = true;
+
   controls.dampingFactor = 0.065;
+
   controls.minDistance = 14;
+
   controls.maxDistance = 52;
+
+  // Move the focus slightly toward the engine side.
   controls.target.set(
     0.0,
     0.0,
     1.45
   );
+
   controls.enablePan = true;
+
   controls.screenSpacePanning = true;
+
+  // ==========================================================
+  // MAIN STUDIO LIGHT
+  // ==========================================================
+
   const hemisphere =
     new THREE.HemisphereLight(
       0xd9ecff,
       0x253448,
       1.8
     );
-  scene.add(hemisphere);
+
+  scene.add(
+    hemisphere
+  );
+
+  // ==========================================================
+  // KEY LIGHT
+  // ==========================================================
+
   const key =
     new THREE.DirectionalLight(
       0xffffff,
       3.2
     );
+
   key.position.set(
     -12,
     -18,
     25
   );
+
   key.castShadow = true;
+
   key.shadow.mapSize.set(
     2048,
     2048
   );
+
   key.shadow.camera.near = 1;
+
   key.shadow.camera.far = 90;
-  scene.add(key);
+
+  scene.add(
+    key
+  );
+
+  // ==========================================================
+  // ENGINE LIGHT
+  // ==========================================================
+
+  // Dedicated light for the engine area so the dark-red
+  // engine block remains clearly visible.
   const engineLight =
     new THREE.DirectionalLight(
       0xffd6b0,
       2.4
     );
+
   engineLight.position.set(
     -16,
     -10,
     15
   );
-  scene.add(engineLight);
+
+  scene.add(
+    engineLight
+  );
+
+  // ==========================================================
+  // GEARBOX FILL LIGHT
+  // ==========================================================
+
   const gearboxLight =
     new THREE.DirectionalLight(
       0xaed8ff,
       1.5
     );
+
   gearboxLight.position.set(
     8,
     13,
     12
   );
-  scene.add(gearboxLight);
+
+  scene.add(
+    gearboxLight
+  );
+
+  // ==========================================================
+  // RIM LIGHT
+  // ==========================================================
+
   const rim =
     new THREE.PointLight(
       0xffa45c,
       1.8,
       50
     );
+
   rim.position.set(
     14,
     -7,
     10
   );
-  scene.add(rim);
+
+  scene.add(
+    rim
+  );
+
+  // ==========================================================
+  // FLOOR
+  // ==========================================================
+
   const floor =
     new THREE.Mesh(
       new THREE.PlaneGeometry(
@@ -334,261 +412,120 @@ function initThree() {
         metalness: 0.12
       })
     );
+
   floor.rotation.x =
     -Math.PI / 2;
+
   floor.position.y = 0;
+
   floor.position.z = 0;
+
   floor.receiveShadow = true;
-  scene.add(floor);
+
+  scene.add(
+    floor
+  );
+
+  // ==========================================================
+  // SOFT FLOOR GLOW
+  // ==========================================================
+
   const floorGlow =
     new THREE.PointLight(
       0x4c8fd6,
       1.0,
       35
     );
+
   floorGlow.position.set(
     -3,
     2,
     3
   );
-  scene.add(floorGlow);
+
+  scene.add(
+    floorGlow
+  );
+
+  // ==========================================================
+  // CLOCK / RESIZE
+  // ==========================================================
+
   clock =
     new THREE.Clock();
+
   window.addEventListener(
     'resize',
     onResize
   );
 }
+
 function onResize() {
   camera.aspect =
     window.innerWidth /
     window.innerHeight;
+
   camera.updateProjectionMatrix();
+
   renderer.setSize(
     window.innerWidth,
     window.innerHeight
   );
 }
+
 // ============================================================
 // MODEL LOADING
 // ============================================================
-function createGarageSign() {
-  const canvas =
-    document.createElement('canvas');
-
-  canvas.width = 1200;
-  canvas.height = 300;
-
-  const ctx =
-    canvas.getContext('2d');
-
-  ctx.clearRect(
-    0,
-    0,
-    canvas.width,
-    canvas.height
-  );
-
-  ctx.shadowColor = '#00d9ff';
-  ctx.shadowBlur = 35;
-
-  ctx.font =
-    'bold 170px Arial';
-
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.fillStyle = '#dffaff';
-
-  ctx.fillText(
-    'GARAGE',
-    canvas.width / 2,
-    canvas.height / 2
-  );
-
-  ctx.shadowBlur = 0;
-
-  ctx.strokeStyle = '#00cfff';
-  ctx.lineWidth = 8;
-
-  ctx.strokeText(
-    'GARAGE',
-    canvas.width / 2,
-    canvas.height / 2
-  );
-
-  const texture =
-    new THREE.CanvasTexture(canvas);
-
-  texture.colorSpace =
-    THREE.SRGBColorSpace;
-
-  texture.needsUpdate = true;
-
-  const material =
-    new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    });
-
-  /*
-   * Mount the sign to the actual Blender garage back wall.
-   * This avoids hard-coded coordinates that can place the
-   * sign on top of the transmission or inside the wall.
-   */
-  const wall =
-    find('Garage_BackWall');
-
-  let signWidth = 7.0;
-  let signHeight = 1.75;
-
-  const sign =
-    new THREE.Mesh(
-      new THREE.PlaneGeometry(
-        signWidth,
-        signHeight
-      ),
-      material
-    );
-
-  sign.name =
-    'Garage_Wall_Sign';
-
-  if (wall) {
-    const wallBox =
-      new THREE.Box3().setFromObject(wall);
-
-    const wallSize =
-      new THREE.Vector3();
-
-    const wallCenter =
-      new THREE.Vector3();
-
-    wallBox.getSize(wallSize);
-    wallBox.getCenter(wallCenter);
-
-    signWidth =
-      Math.min(
-        7.0,
-        Math.max(
-          4.5,
-          wallSize.x * 0.55
-        )
-      );
-
-    signHeight =
-      signWidth * 0.25;
-
-    sign.geometry.dispose();
-
-    sign.geometry =
-      new THREE.PlaneGeometry(
-        signWidth,
-        signHeight
-      );
-
-    /*
-     * The camera is on the negative-Y side of the garage.
-     * The front face of the back wall is therefore its
-     * minimum-Y face. Put the sign just in front of it.
-     */
-    sign.position.set(
-      wallCenter.x,
-      wallBox.min.y - 0.06,
-      wallBox.min.z +
-        wallSize.z * 0.60
-    );
-  } else {
-    /*
-     * Safe fallback for an older GLB without
-     * Garage_BackWall.
-     */
-    sign.position.set(
-      1.6,
-      7.20,
-      6.0
-    );
-  }
-
-  /*
-   * PlaneGeometry starts in the XY plane.
-   * +90° around X makes it a vertical wall sign
-   * facing toward the camera (-Y).
-   */
-  sign.rotation.set(
-    Math.PI / 2,
-    0,
-    0
-  );
-
-  sign.renderOrder = 10;
-
-  scene.add(sign);
-}
-
-function resetGarageCameraView() {
-  if (!camera || !controls) {
-    return;
-  }
-
-  camera.position.set(
-    3.0,
-    -31.0,
-    19.0
-  );
-
-  controls.target.set(
-    0.0,
-    0.0,
-    1.45
-  );
-
-  controls.update();
-}
 
 function loadModel() {
   return new Promise(
     (resolve, reject) => {
       const loader =
         new GLTFLoader();
+
       loader.load(
         MODEL_URL,
+
         (gltf) => {
           loadedModel =
             gltf.scene;
+
           transmissionRoot =
             loadedModel.getObjectByName(
               'TransmissionRoot'
-            ) ||
-            loadedModel;
+            ) || loadedModel;
+
           scene.add(
             loadedModel
           );
+
           loadedModel.traverse(
             (obj) => {
-              if (!obj.isMesh) {
-                return;
-              }
+              if (!obj.isMesh) return;
+
               obj.castShadow = true;
               obj.receiveShadow = true;
+
               if (obj.material) {
                 obj.userData.originalMaterial =
                   obj.material;
               }
             }
           );
+
           createObjectReferences();
+
           setupPowerFlow();
-          createGarageSign();
-          resetGarageCameraView();
+
           dom.loading.classList.add(
             'hidden'
           );
+
           resolve(gltf);
         },
+
         undefined,
+
         (error) => {
           reject(error);
         }
@@ -596,42 +533,41 @@ function loadModel() {
     }
   );
 }
+
 function find(name) {
-  return (
-    loadedModel?.getObjectByName(name) ||
-    null
-  );
+  return loadedModel?.getObjectByName(name) || null;
 }
+
 function requiredObject(name) {
   const obj = find(name);
+
   if (!obj) {
     throw new Error(
       `Required GLB object missing: ${name}`
     );
   }
+
   return obj;
 }
+
 function createObjectReferences() {
   refs.shafts.input =
-    requiredObject(
-      'Input_Shaft'
-    );
+    requiredObject('Input_Shaft');
+
   refs.shafts.output =
-    requiredObject(
-      'Output_Shaft'
-    );
+    requiredObject('Output_Shaft');
+
   refs.shafts.driveshaft =
-    requiredObject(
-      'Driveshaft'
-    );
+    requiredObject('Driveshaft');
+
   refs.shafts.rearAxle =
-    requiredObject(
-      'Rear_Axle'
-    );
+    requiredObject('Rear_Axle');
+
   refs.diff =
     requiredObject(
       'Differential_Housing'
     );
+
   for (
     const gear of FORWARD_GEARS
   ) {
@@ -640,92 +576,85 @@ function createObjectReferences() {
         requiredObject(
           `Gear_${gear}_Input`
         ),
+
       output:
         requiredObject(
           `Gear_${gear}_Output`
         )
     };
+
     refs.synchronizers[gear] =
       requiredObject(
         `Synchronizer_${gear}`
       );
+
     refs.sleeves[gear] =
       requiredObject(
         `SynchroSleeve_${gear}`
       );
+
     refs.forks[gear] =
       requiredObject(
         `ShiftFork_${gear}`
       );
   }
+
   refs.gears.R = {
     input:
       requiredObject(
         'Reverse_Input'
       ),
+
     idler:
       requiredObject(
         'Reverse_Idler'
       ),
+
     output:
       requiredObject(
         'Reverse_Output'
       )
   };
+
   refs.synchronizers.R =
     requiredObject(
       'Reverse_Synchronizer'
     );
+
   refs.sleeves.R =
     requiredObject(
       'Reverse_SynchroSleeve'
     );
+
   refs.forks.R =
     requiredObject(
       'Reverse_ShiftFork'
     );
+
   refs.wheels.RL =
     requiredObject(
       'Wheel_Tire_RL'
     );
+
   refs.wheels.RR =
     requiredObject(
       'Wheel_Tire_RR'
     );
+
   refs.wheels.FL =
     requiredObject(
       'Wheel_Tire_FL'
     );
+
   refs.wheels.FR =
     requiredObject(
       'Wheel_Tire_FR'
     );
-      // ============================================================
-  // SHIFT-BY-WIRE HARDWARE
-  // ============================================================
-  refs.sbw.actuator =
-    requiredObject('SBW_Actuator');
-  refs.sbw.actuatorCore =
-    requiredObject('SBW_Actuator_Core');
-  refs.sbw.actuatorLink =
-    requiredObject('SBW_Actuator_Link');
-  refs.sbw.selectorRail =
-    requiredObject('SBW_Selector_Rail');
-  refs.sbw.tcu =
-    requiredObject('SBW_TCU');
-  for (const gear of FORWARD_GEARS) {
-    refs.sbw.selectorLinks[gear] =
-      requiredObject(`SBW_Selector_Link_${gear}`);
-  }
-  console.log(
-    'SBW hardware references connected:',
-    refs.sbw
-  );
-  initializeSBWVisualState();
 }
 // ============================================================
 // HIGHLIGHTING
 // ============================================================
+
 function applyEmissiveHighlight(
   object,
   color,
@@ -739,14 +668,17 @@ function applyEmissiveHighlight(
       ) {
         return;
       }
+
       if (
         !child.userData.highlightMaterial
       ) {
         child.userData.highlightMaterial =
           child.material.clone();
       }
+
       child.material =
         child.userData.highlightMaterial;
+
       if (
         'emissive'
         in child.material
@@ -755,6 +687,7 @@ function applyEmissiveHighlight(
           color
         );
       }
+
       if (
         'emissiveIntensity'
         in child.material
@@ -765,12 +698,12 @@ function applyEmissiveHighlight(
     }
   );
 }
+
 function clearHighlight(object) {
   object.traverse?.(
     (child) => {
-      if (!child.isMesh) {
-        return;
-      }
+      if (!child.isMesh) return;
+
       if (
         child.userData.originalMaterial
       ) {
@@ -780,6 +713,7 @@ function clearHighlight(object) {
     }
   );
 }
+
 function updateHighlighting() {
   for (
     const gear of [
@@ -789,51 +723,63 @@ function updateHighlighting() {
   ) {
     const group =
       refs.gears[gear];
+
     if (group) {
       clearHighlight(
         group.input
       );
+
       clearHighlight(
         group.output
       );
+
       if (group.idler) {
         clearHighlight(
           group.idler
         );
       }
     }
+
     clearHighlight(
       refs.synchronizers[gear]
     );
+
     clearHighlight(
       refs.sleeves[gear]
     );
+
     clearHighlight(
       refs.forks[gear]
     );
   }
+
   if (
     state.gear === 'N' ||
     state.shifting
   ) {
     return;
   }
+
   const color =
     state.gear === 'R'
       ? REVERSE_HIGHLIGHT_COLOR
       : HIGHLIGHT_COLOR;
+
   const group =
     refs.gears[state.gear];
+
   applyEmissiveHighlight(
     group.input,
     color,
     2.2
   );
+
   applyEmissiveHighlight(
     group.output,
     color,
     2.2
   );
+
   if (group.idler) {
     applyEmissiveHighlight(
       group.idler,
@@ -841,44 +787,54 @@ function updateHighlighting() {
       2.35
     );
   }
+
   applyEmissiveHighlight(
     refs.synchronizers[state.gear],
     color,
     2.1
   );
+
   applyEmissiveHighlight(
     refs.sleeves[state.gear],
     color,
     2.25
   );
+
   applyEmissiveHighlight(
     refs.forks[state.gear],
     color,
     2.0
   );
 }
+
 // ============================================================
 // PHYSICS
 // ============================================================
+
 function getSelectedRatio() {
   return GEAR_RATIOS[
     state.gear
   ];
 }
+
 function updatePhysics() {
   const ratio =
     getSelectedRatio();
+
   const clutchFactor =
     state.clutchEngaged
       ? 1
       : 0;
+
   const shiftFactor =
     state.shifting
       ? 0
       : state.torqueBlend;
+
   const torqueTransfer =
     clutchFactor *
     shiftFactor;
+
   if (
     state.gear === 'N' ||
     !ratio
@@ -892,13 +848,14 @@ function updatePhysics() {
         Math.abs(ratio) *
         FINAL_DRIVE
       );
+
     state.wheelRPM =
       (
         state.gear === 'R'
           ? -signedWheel
           : signedWheel
-      ) *
-      torqueTransfer;
+      ) * torqueTransfer;
+
     state.outputTorque =
       ENGINE_TORQUE_NM *
       Math.abs(ratio) *
@@ -907,6 +864,7 @@ function updatePhysics() {
       torqueTransfer;
   }
 }
+
 function getEnginePowerKW() {
   return (
     ENGINE_TORQUE_NM *
@@ -917,11 +875,13 @@ function getEnginePowerKW() {
     1000
   );
 }
+
 function getVehicleSpeedKmh() {
   const circumference =
     2 *
     Math.PI *
     WHEEL_RADIUS_M;
+
   return (
     Math.abs(state.wheelRPM) *
     circumference *
@@ -929,39 +889,43 @@ function getVehicleSpeedKmh() {
     1000
   );
 }
+
 // ============================================================
 // SHIFT-BY-WIRE CONTROLLER
 // ============================================================
+
 function sbwLog(message) {
-  const time =
-    new Date().toLocaleTimeString(
-      [],
-      {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }
-    );
+  const time = new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
   sbwState.eventLog.unshift(
     `[${time}] ${message}`
   );
+
   sbwState.eventLog =
     sbwState.eventLog.slice(
       0,
       sbwState.maxLogEntries
     );
+
   if (dom.sbwEventLog) {
     dom.sbwEventLog.textContent =
       sbwState.eventLog.join('\n');
   }
 }
+
 function requestGear(gear) {
   if (
     !SBW_ALLOWED_GEARS.includes(gear)
   ) {
     return;
   }
+
   sbwState.requestedGear = gear;
+
   if (
     sbwState.mode === 'MECHANICAL'
   ) {
@@ -970,57 +934,77 @@ function requestGear(gear) {
     sbwState.communication = 'N/A';
     sbwState.security = 'NORMAL';
     sbwState.tcuStatus = 'BYPASSED';
+
     sbwLog(
       `MECHANICAL: selector → ${gear}`
     );
+
     setGear(gear);
     updateUI();
     return;
   }
+
   if (
     sbwState.activeFault ===
     'LOST_COMMUNICATION'
   ) {
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.communication =
       'LOST';
+
     sbwState.security =
       'COMMUNICATION FAULT';
+
     sbwLog(
       `COMMAND ${gear} blocked: communication lost`
     );
+
     updateUI();
     return;
   }
+
   if (state.shifting) {
     sbwLog(
       `COMMAND ${gear} ignored: transmission busy`
     );
+
     updateUI();
     return;
   }
+
   sbwState.tcuStatus =
     'PROCESSING';
+
   sbwState.communication =
     'TX';
+
   sbwState.security =
     'NORMAL';
+
   sbwState.sequence += 1;
+
   const packet = {
     sequence:
       sbwState.sequence,
+
     requestedGear:
       gear,
+
     timestamp:
       performance.now()
   };
+
   sbwState.receivedGear =
     gear;
+
   sbwLog(
     `TX → TCU: gear ${gear} [SEQ ${packet.sequence}]`
   );
+
   updateUI();
+
   window.setTimeout(
     () => {
       processSBWCommand(packet);
@@ -1028,6 +1012,7 @@ function requestGear(gear) {
     SBW_COMMAND_DELAY_MS
   );
 }
+
 function processSBWCommand(packet) {
   if (
     packet.sequence !==
@@ -1035,27 +1020,34 @@ function processSBWCommand(packet) {
   ) {
     return;
   }
+
   if (
     sbwState.mode !== 'SBW'
   ) {
     return;
   }
+
   if (
     sbwState.activeFault ===
     'LOST_COMMUNICATION'
   ) {
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.communication =
       'LOST';
+
     sbwState.security =
       'COMMUNICATION FAULT';
+
     sbwLog(
       'RX blocked: communication lost'
     );
+
     updateUI();
     return;
   }
+
   if (
     sbwState.activeFault ===
     'INVALID_COMMAND'
@@ -1064,73 +1056,99 @@ function processSBWCommand(packet) {
       packet.requestedGear === 'R'
         ? '3'
         : 'R';
+
     sbwState.receivedGear =
       injectedGear;
+
     sbwState.validatedGear =
       '—';
+
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.communication =
       'COMPROMISED';
+
     sbwState.security =
       'COMMAND REJECTED';
+
     sbwLog(
       `FAULT: injected ${injectedGear} instead of ${packet.requestedGear}`
     );
+
     sbwLog(
       'TCU validation rejected command — SAFE HOLD'
     );
+
     updateUI();
     return;
   }
+
   if (
     sbwState.activeFault ===
     'STALE_COMMAND'
   ) {
     const simulatedAge =
       2000;
+
     sbwState.receivedGear =
       packet.requestedGear;
+
     sbwState.validatedGear =
       '—';
+
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.communication =
       'STALE';
+
     sbwState.security =
       'STALE COMMAND REJECTED';
+
     sbwLog(
       `FAULT: command age ${simulatedAge} ms`
     );
+
     sbwLog(
       'TCU rejected stale command — SAFE HOLD'
     );
+
     updateUI();
     return;
   }
+
   if (
     sbwState.activeFault ===
     'CONFLICTING_STATUS'
   ) {
     sbwState.receivedGear =
       packet.requestedGear;
+
     sbwState.validatedGear =
       state.gear;
+
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.communication =
       'CONFLICT';
+
     sbwState.security =
       'STATUS CONFLICT';
+
     sbwLog(
       `FAULT: requested ${packet.requestedGear}, status reports ${state.gear}`
     );
+
     sbwLog(
       'TCU rejected conflicting status — SAFE HOLD'
     );
+
     updateUI();
     return;
   }
+
   if (
     !SBW_ALLOWED_GEARS.includes(
       packet.requestedGear
@@ -1138,34 +1156,49 @@ function processSBWCommand(packet) {
   ) {
     sbwState.validatedGear =
       '—';
+
     sbwState.tcuStatus =
       'SAFE HOLD';
+
     sbwState.security =
       'INVALID GEAR';
+
     sbwLog(
       'TCU rejected invalid gear value'
     );
+
     updateUI();
     return;
   }
+
   sbwState.receivedGear =
     packet.requestedGear;
+
   sbwState.validatedGear =
     packet.requestedGear;
+
   sbwState.communication =
     'OK';
+
   sbwState.security =
     'COMMAND VALID';
+
   sbwState.tcuStatus =
     'ACTUATING';
+
   sbwLog(
     `TCU validated ${packet.requestedGear} — actuator command sent`
   );
+
+  // Existing transmission animation performs
+  // the physical shift.
   setGear(
     packet.requestedGear
   );
+
   updateUI();
 }
+
 function injectSBWFault(type) {
   const validFaults = [
     'INVALID_COMMAND',
@@ -1173,257 +1206,215 @@ function injectSBWFault(type) {
     'STALE_COMMAND',
     'CONFLICTING_STATUS'
   ];
+
   if (
     !validFaults.includes(type)
   ) {
     return;
   }
+
   sbwState.activeFault =
     type;
+
   switch (type) {
     case 'INVALID_COMMAND':
       sbwState.tcuStatus =
         'MONITORING';
+
       sbwState.communication =
         'OK';
+
       sbwState.security =
         'FAULT INJECTED';
+
       sbwLog(
         'FAULT INJECTION: INVALID COMMAND'
       );
       break;
+
     case 'LOST_COMMUNICATION':
       sbwState.tcuStatus =
         'SAFE HOLD';
+
       sbwState.communication =
         'LOST';
+
       sbwState.security =
         'COMMUNICATION FAULT';
+
       sbwLog(
         'FAULT INJECTION: LOST COMMUNICATION'
       );
       break;
+
     case 'STALE_COMMAND':
       sbwState.tcuStatus =
         'MONITORING';
+
       sbwState.communication =
         'STALE';
+
       sbwState.security =
         'FAULT INJECTED';
+
       sbwLog(
         'FAULT INJECTION: STALE COMMAND'
       );
       break;
+
     case 'CONFLICTING_STATUS':
       sbwState.tcuStatus =
         'MONITORING';
+
       sbwState.communication =
         'CONFLICT';
+
       sbwState.security =
         'FAULT INJECTED';
+
       sbwLog(
         'FAULT INJECTION: CONFLICTING STATUS'
       );
       break;
   }
+
   updateUI();
 }
+
 function clearSBWFault() {
   sbwState.activeFault =
     'NONE';
+
   sbwState.tcuStatus =
     sbwState.mode === 'SBW'
       ? 'ONLINE'
       : 'BYPASSED';
+
   sbwState.communication =
     sbwState.mode === 'SBW'
       ? 'OK'
       : 'N/A';
+
   sbwState.security =
     'NORMAL';
+
   sbwState.requestedGear =
     state.gear;
+
   sbwState.receivedGear =
     state.gear;
+
   sbwState.validatedGear =
     state.gear;
+
   sbwLog(
     'FAULT CLEARED — TCU returned to normal'
   );
+
   updateUI();
 }
+
 // ============================================================
 // GEAR SHIFTING
 // ============================================================
-// ============================================================
-// SHIFT-BY-WIRE 3D ACTUATOR VISUALIZATION
-// ============================================================
-function initializeSBWVisualState() {
-  const objects = [
-    refs.sbw.actuator,
-    refs.sbw.actuatorCore,
-    refs.sbw.actuatorLink,
-    refs.sbw.selectorRail
-  ];
-  for (const object of objects) {
-    if (!object) continue;
-    object.userData.sbwBaseX ??= object.position.x;
-  }
-  for (const gear of FORWARD_GEARS) {
-    const link = refs.sbw.selectorLinks[gear];
-    if (link) {
-      link.userData.sbwBaseX ??= link.position.x;
-      link.userData.sbwBaseY ??= link.position.y;
-    }
-  }
-}
-function updateSBWVisualAnimation(t) {
-  const sbw = refs.sbw;
-  if (!sbw?.actuator) return;
-  const targetGear = state.targetGear;
-  const targetOffset = SBW_GEAR_OFFSETS[targetGear] ?? 0;
-  const move = THREE.MathUtils.smoothstep(t, 0, 1);
-  const actuatorBase =
-    sbw.actuator.userData.sbwBaseX ?? sbw.actuator.position.x;
-  const currentOffset =
-    sbw.actuator.position.x - actuatorBase;
-  const animatedOffset = THREE.MathUtils.lerp(
-    currentOffset,
-    targetOffset,
-    move
-  );
-  sbw.actuator.position.x =
-    actuatorBase + animatedOffset;
-  if (sbw.actuatorCore) {
-    const base =
-      sbw.actuatorCore.userData.sbwBaseX ?? sbw.actuatorCore.position.x;
-    sbw.actuatorCore.position.x =
-      base + animatedOffset;
-    sbw.actuatorCore.rotation.z += 0.12 * move;
-  }
-  if (sbw.actuatorLink) {
-    const base =
-      sbw.actuatorLink.userData.sbwBaseX ?? sbw.actuatorLink.position.x;
-    sbw.actuatorLink.position.x =
-      base + animatedOffset;
-  }
-  if (sbw.selectorRail) {
-    const base =
-      sbw.selectorRail.userData.sbwBaseX ?? sbw.selectorRail.position.x;
-    sbw.selectorRail.position.x =
-      base + animatedOffset * 0.65;
-  }
-  for (const gear of FORWARD_GEARS) {
-    const link = sbw.selectorLinks[gear];
-    if (!link) continue;
-    const baseY =
-      link.userData.sbwBaseY ?? link.position.y;
-    const isTarget = String(gear) === String(targetGear);
-    link.position.y =
-      baseY + (isTarget ? 0.08 * move : 0);
-  }
-}
-function resetSBWVisualState() {
-  const sbw = refs.sbw;
-  if (!sbw) return;
-  for (const object of [
-    sbw.actuator,
-    sbw.actuatorCore,
-    sbw.actuatorLink,
-    sbw.selectorRail
-  ]) {
-    if (!object) continue;
-    const base = object.userData.sbwBaseX;
-    if (base !== undefined) object.position.x = base;
-  }
-  for (const gear of FORWARD_GEARS) {
-    const link = sbw.selectorLinks[gear];
-    if (!link) continue;
-    if (link.userData.sbwBaseX !== undefined) {
-      link.position.x = link.userData.sbwBaseX;
-    }
-    if (link.userData.sbwBaseY !== undefined) {
-      link.position.y = link.userData.sbwBaseY;
-    }
-  }
-}
+
 function setGear(gear) {
   if (
     !(gear in GEAR_RATIOS)
   ) {
     return;
   }
+
   if (
     state.shifting &&
     state.targetGear === gear
   ) {
     return;
   }
+
   if (
     !state.shifting &&
     state.gear === gear
   ) {
     return;
   }
+
   startEngineAudio();
+
   state.targetGear =
     gear;
+
   state.shifting =
     true;
+
   state.shiftElapsed =
     0;
+
   state.torqueBlend =
     0;
+
   playSound(
     'gear_shift'
   );
+
   updateHighlighting();
 }
+
 function updateShiftAnimation(
   delta
 ) {
   if (!state.shifting) {
     return;
   }
+
   state.shiftElapsed +=
     delta;
+
   const t =
     Math.min(
       state.shiftElapsed /
-        state.shiftDuration,
+      state.shiftDuration,
       1
     );
-  updateSBWVisualAnimation(t);
+
   const engageStage =
     t < 0.42
       ? 0
       : (
           t - 0.42
         ) / 0.58;
+
   const selected =
     state.targetGear === 'N'
       ? null
       : refs.sleeves[
           state.targetGear
         ];
+
   const selectedFork =
     state.targetGear === 'N'
       ? null
       : refs.forks[
           state.targetGear
         ];
+
+  // Retract current synchronizer/fork first.
   const current =
     state.gear;
+
   if (
     current !== 'N'
   ) {
     const currentSleeve =
       refs.sleeves[current];
+
     const currentFork =
       refs.forks[current];
+
     const currentBase =
       currentSleeve.userData.baseX ??
       currentSleeve.position.x;
+
     currentSleeve.position.x =
       THREE.MathUtils.lerp(
         currentBase + 0.62,
@@ -1433,6 +1424,7 @@ function updateShiftAnimation(
           1
         )
       );
+
     moveFork(
       currentFork,
       0.42,
@@ -1442,10 +1434,13 @@ function updateShiftAnimation(
       )
     );
   }
+
+  // Engage target synchronizer/fork.
   if (selected) {
     const base =
       selected.userData.baseX ??
       selected.position.x;
+
     selected.position.x =
       THREE.MathUtils.lerp(
         base,
@@ -1456,6 +1451,7 @@ function updateShiftAnimation(
           1
         )
       );
+
     moveFork(
       selectedFork,
       -0.42,
@@ -1466,15 +1462,21 @@ function updateShiftAnimation(
       )
     );
   }
+
   if (t >= 1) {
     state.gear =
       state.targetGear;
+
     state.shifting =
       false;
+
     state.torqueBlend =
       1;
+
     resetSelectorPositions();
+
     updateHighlighting();
+
     playSound(
       state.gear === 'R'
         ? 'reverse'
@@ -1482,22 +1484,24 @@ function updateShiftAnimation(
     );
   }
 }
+
 function moveFork(
   fork,
   offset,
   amount
 ) {
-  if (!fork) {
-    return;
-  }
+  if (!fork) return;
+
   const base =
     fork.userData.baseY ??
     fork.position.y;
+
   fork.position.y =
     base +
     offset *
     amount;
 }
+
 function resetSelectorPositions() {
   for (
     const gear of [
@@ -1507,70 +1511,110 @@ function resetSelectorPositions() {
   ) {
     const sleeve =
       refs.sleeves[gear];
+
     const fork =
       refs.forks[gear];
+
     if (sleeve) {
       sleeve.userData.baseX ??=
         sleeve.position.x;
+
       sleeve.position.x =
         sleeve.userData.baseX;
     }
+
     if (fork) {
       fork.userData.baseY ??=
         fork.position.y;
+
       fork.position.y =
         fork.userData.baseY;
     }
   }
 }
+
 // ============================================================
 // ROTATION ANIMATION
 // ============================================================
-function updateGearRotation(
-  delta
-) {
+
+// ============================================================
+// ROTATION ANIMATION
+// ============================================================
+
+function updateGearRotation(delta) {
   if (state.paused) {
     return;
   }
+
+  // ----------------------------------------------------------
+  // ENGINE RPM -> angular velocity
+  // ----------------------------------------------------------
+
   const engineRad =
     state.engineRPM *
     2 *
     Math.PI /
     60;
+
   const counterRad =
     -engineRad;
+
+  // ----------------------------------------------------------
+  // ENGINE / CLUTCH
+  // ----------------------------------------------------------
+
   rotateObjectByName(
     'Flywheel',
     engineRad * delta
   );
+
   rotateObjectByName(
     'Clutch',
     engineRad * delta
   );
+
   rotateObjectByName(
     'Pressure_Plate',
     engineRad * delta
   );
+
+  // ----------------------------------------------------------
+  // INPUT SHAFT
+  // ----------------------------------------------------------
+
   refs.shafts.input.rotateX(
     counterRad * delta
   );
+
+  // ----------------------------------------------------------
+  // OUTPUT SHAFT
+  // ----------------------------------------------------------
+
   const wheelAngularVelocity =
     state.wheelRPM *
     2 *
     Math.PI /
     60;
+
   refs.shafts.output.rotateX(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
+
+  // ----------------------------------------------------------
+  // FORWARD GEARS
+  // ----------------------------------------------------------
+
   for (
     const gear of FORWARD_GEARS
   ) {
+    // Countershaft gears always rotate with input shaft.
     refs.gears[
       gear
     ].input.rotateX(
       counterRad * delta
     );
+
+    // Selected output gear rotates with output shaft.
     if (
       state.gear === gear &&
       !state.shifting &&
@@ -1579,84 +1623,132 @@ function updateGearRotation(
       refs.gears[
         gear
       ].output.rotateX(
-        wheelAngularVelocity *
-        delta
+        wheelAngularVelocity * delta
       );
     }
   }
+
+  // ----------------------------------------------------------
+  // REVERSE GEARS
+  // ----------------------------------------------------------
+
   refs.gears.R.input.rotateX(
     counterRad * delta
   );
+
   refs.gears.R.idler.rotateX(
     engineRad * delta
   );
+
   if (
     state.gear === 'R' &&
     !state.shifting &&
     state.clutchEngaged
   ) {
     refs.gears.R.output.rotateX(
-      wheelAngularVelocity *
-      delta
+      wheelAngularVelocity * delta
     );
   }
+
+  // ----------------------------------------------------------
+  // DRIVESHAFT
+  // ----------------------------------------------------------
+
   refs.shafts.driveshaft.rotateX(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
+
+  // ----------------------------------------------------------
+  // DIFFERENTIAL
+  // ----------------------------------------------------------
+
   refs.diff.rotateX(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
+
+  // ----------------------------------------------------------
+  // REAR AXLE
+  // ----------------------------------------------------------
+
   refs.shafts.rearAxle.rotateZ(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
+
+  // ----------------------------------------------------------
+  // REAR WHEELS - POWERED
+  // ----------------------------------------------------------
+
   refs.wheels.RL.rotateY(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
+
   refs.wheels.RR.rotateY(
-    wheelAngularVelocity *
-    delta
+    wheelAngularVelocity * delta
   );
-  refs.shafts.rearAxle.rotateZ(
-    wheelAngularVelocity *
-    delta
-  );
-  refs.wheels.RL.rotateY(
-    wheelAngularVelocity *
-    delta
-  );
-  refs.wheels.RR.rotateY(
-    wheelAngularVelocity *
-    delta
-  );
+
+  // ----------------------------------------------------------
+  // FRONT WHEELS - NOT POWERED
+  // ----------------------------------------------------------
+
+  // These are free-rolling wheels.
+  // They do not receive engine torque directly.
+  // They simply roll according to vehicle wheel speed.
+
+  // This makes the front wheels visually consistent with
+  // the rear wheels while keeping the drivetrain RWD.
+  // ----------------------------------------------------------
+  // ----------------------------------------------------------
+// REAR AXLE
+// ----------------------------------------------------------
+
+refs.shafts.rearAxle.rotateZ(
+  wheelAngularVelocity * delta
+);
+
+// ----------------------------------------------------------
+// REAR WHEELS - POWERED
+// ----------------------------------------------------------
+
+refs.wheels.RL.rotateY(
+  wheelAngularVelocity * delta
+);
+
+refs.wheels.RR.rotateY(
+  wheelAngularVelocity * delta
+);
 }
+
 // ============================================================
 // FRONT WHEEL VISUAL ROLL
 // ============================================================
+
 function rotateObjectByName(
   name,
   amount
 ) {
   const obj =
     find(name);
+
   if (obj) {
     obj.rotateX(amount);
   }
 }
+
 // ============================================================
 // POWER FLOW
 // ============================================================
+
 function setupPowerFlow() {
   refs.flowGroup =
     new THREE.Group();
+
   refs.flowGroup.visible =
     false;
+
   scene.add(
     refs.flowGroup
   );
+
   for (
     let i = 0;
     i < 12;
@@ -1676,11 +1768,13 @@ function setupPowerFlow() {
               : 0xff7a2f
         })
       );
+
     refs.flowGroup.add(
       mesh
     );
   }
 }
+
 function getWorldPoint(
   obj,
   yOffset = 0,
@@ -1688,33 +1782,44 @@ function getWorldPoint(
 ) {
   const p =
     new THREE.Vector3();
-  obj.getWorldPosition(p);
+
+  obj.getWorldPosition(
+    p
+  );
+
   p.y += yOffset;
   p.z += zOffset;
+
   return p;
 }
+
 function buildFlowPath() {
   if (
     state.gear === 'N'
   ) {
     return [];
   }
+
   const input =
     refs.gears[
       state.gear
     ].input;
+
   const output =
     refs.gears[
       state.gear
     ].output;
+
   const points = [
     getWorldPoint(
       find('Flywheel')
     ),
+
     getWorldPoint(
       input
     )
   ];
+
   if (
     state.gear === 'R'
   ) {
@@ -1724,28 +1829,34 @@ function buildFlowPath() {
       )
     );
   }
+
   points.push(
     getWorldPoint(
       output
     )
   );
+
   points.push(
     getWorldPoint(
       refs.shafts.driveshaft
     )
   );
+
   points.push(
     getWorldPoint(
       refs.diff
     )
   );
+
   points.push(
     getWorldPoint(
       refs.wheels.RL
     )
   );
+
   return points;
 }
+
 function interpolatePath(
   points,
   distance
@@ -1758,8 +1869,10 @@ function interpolatePath(
       new THREE.Vector3()
     );
   }
+
   let remaining =
     distance;
+
   for (
     let i = 0;
     i < points.length - 1;
@@ -1767,10 +1880,15 @@ function interpolatePath(
   ) {
     const a =
       points[i];
+
     const b =
       points[i + 1];
+
     const seg =
-      a.distanceTo(b);
+      a.distanceTo(
+        b
+      );
+
     if (
       remaining <= seg
     ) {
@@ -1783,13 +1901,18 @@ function interpolatePath(
         )
       );
     }
-    remaining -= seg;
+
+    remaining -=
+      seg;
   }
+
   return points[
     points.length - 1
   ].clone();
 }
+
 let flowDistance = 0;
+
 function updatePowerFlow(
   delta
 ) {
@@ -1798,28 +1921,37 @@ function updatePowerFlow(
     state.clutchEngaged &&
     !state.shifting &&
     !state.paused;
+
   refs.flowGroup.visible =
     connected;
+
   if (!connected) {
     dom.flow.textContent =
       'POWER FLOW: DISCONNECTED';
+
     dom.flow.className =
       'flow-readout disconnected';
+
     return;
   }
+
   dom.flow.textContent =
     state.gear === 'R'
       ? 'POWER FLOW: ENGINE → REVERSE IDLER → WHEELS'
       : 'POWER FLOW: ENGINE → GEARBOX → WHEELS';
+
   dom.flow.className =
     'flow-readout connected';
+
   const path =
     buildFlowPath();
+
   if (
     path.length < 2
   ) {
     return;
   }
+
   const total =
     path.reduce(
       (
@@ -1835,22 +1967,24 @@ function updatePowerFlow(
           : 0,
       0
     );
+
   flowDistance =
     (
       flowDistance +
       delta *
-        (
-          1.6 +
-          Math.abs(
-            state.wheelRPM
-          ) /
-            500
-        )
+      (
+        1.6 +
+        Math.abs(
+          state.wheelRPM
+        ) /
+        500
+      )
     ) %
     Math.max(
       total,
       0.01
     );
+
   refs.flowGroup.children.forEach(
     (
       particle,
@@ -1865,6 +1999,7 @@ function updatePowerFlow(
           ) *
           total
         ) % total;
+
       particle.position.copy(
         interpolatePath(
           path,
@@ -1874,34 +2009,44 @@ function updatePowerFlow(
     }
   );
 }
+
 // ============================================================
 // UI
 // ============================================================
+
 function updateUI() {
   const ratio =
     getSelectedRatio();
+
   const speed =
     getVehicleSpeedKmh();
+
   const power =
     getEnginePowerKW();
+
   dom.gearReadout.textContent =
     GEAR_NAMES[
       state.gear
     ];
+
   dom.rpmReadout.textContent =
     Math.round(
       state.engineRPM
     ).toString();
+
   dom.rpmSliderValue.textContent =
     Math.round(
       state.engineRPM
     ).toString();
+
   dom.engineTorque.textContent =
     `${ENGINE_TORQUE_NM} Nm`;
+
   dom.outputTorque.textContent =
     `${Math.round(
       state.outputTorque
     )} Nm`;
+
   dom.wheelRPM.textContent =
     state.gear === 'R'
       ? `${Math.round(
@@ -1910,48 +2055,58 @@ function updateUI() {
       : Math.round(
           state.wheelRPM
         ).toString();
+
   dom.speed.textContent =
     `${speed.toFixed(1)} km/h`;
+
   dom.power.textContent =
     `${power.toFixed(1)} kW`;
+
   dom.ratio.textContent =
     ratio
       ? ratio.toFixed(2)
       : '—';
+
   dom.clutchButton.textContent =
     `CLUTCH: ${
       state.clutchEngaged
         ? 'ENGAGED'
         : 'DISENGAGED'
     }`;
+
   dom.clutchButton.className =
     `wide-button ${
       state.clutchEngaged
         ? 'clutch-engaged'
         : 'clutch-disengaged'
     }`;
+
   dom.clutchStatus.textContent =
     state.clutchEngaged
       ? 'CLUTCH ENGAGED'
       : 'CLUTCH DISENGAGED';
+
   dom.clutchStatus.className =
     `status-pill ${
       state.clutchEngaged
         ? 'neutral'
         : ''
     }`;
+
   dom.transmissionStatus.textContent =
     state.paused
       ? 'PAUSED'
       : state.shifting
         ? 'SHIFTING'
         : 'RUNNING';
+
   dom.transmissionStatus.style.color =
     state.paused
       ? '#b9c7d8'
       : state.shifting
         ? '#ffd08a'
         : '#ffb85f';
+
   for (
     const button of dom.gearButtons
   ) {
@@ -1962,9 +2117,11 @@ function updateUI() {
         !state.shifting
     );
   }
+
   // Shift-by-wire telemetry
   sbwState.actualGear =
     state.gear;
+
   if (
     sbwState.mode === 'SBW' &&
     !state.shifting &&
@@ -1972,37 +2129,56 @@ function updateUI() {
   ) {
     sbwState.tcuStatus =
       'ONLINE';
+
     sbwState.communication =
       'OK';
+
     sbwState.security =
       'NORMAL';
+
     sbwState.validatedGear =
       state.gear;
   }
-  if (dom.sbwMode)
+
+  if (dom.sbwMode) {
     dom.sbwMode.value =
       sbwState.mode;
-  if (dom.sbwStatus)
+  }
+
+  if (dom.sbwStatus) {
     dom.sbwStatus.textContent =
       sbwState.tcuStatus;
-  if (dom.sbwRequested)
+  }
+
+  if (dom.sbwRequested) {
     dom.sbwRequested.textContent =
       sbwState.requestedGear;
-  if (dom.sbwReceived)
+  }
+
+  if (dom.sbwReceived) {
     dom.sbwReceived.textContent =
       sbwState.receivedGear;
-  if (dom.sbwValidated)
+  }
+
+  if (dom.sbwValidated) {
     dom.sbwValidated.textContent =
       sbwState.validatedGear;
-  if (dom.sbwActual)
+  }
+
+  if (dom.sbwActual) {
     dom.sbwActual.textContent =
       sbwState.actualGear;
-  if (dom.sbwCommunication)
+  }
+
+  if (dom.sbwCommunication) {
     dom.sbwCommunication.textContent =
       sbwState.communication;
+  }
+
   if (dom.sbwSecurity) {
     dom.sbwSecurity.textContent =
       `SECURITY: ${sbwState.security}`;
+
     const dangerStates = [
       'COMMAND REJECTED',
       'COMMUNICATION FAULT',
@@ -2010,10 +2186,12 @@ function updateUI() {
       'STATUS CONFLICT',
       'INVALID GEAR'
     ];
+
     const warningStates = [
       'FAULT INJECTED',
       'COMMAND VALID'
     ];
+
     dom.sbwSecurity.className =
       `sbw-security ${
         dangerStates.includes(
@@ -2027,6 +2205,7 @@ function updateUI() {
             : 'normal'
       }`;
   }
+
   if (
     dom.sbwEventLog &&
     sbwState.eventLog.length === 0
@@ -2035,36 +2214,19 @@ function updateUI() {
       'TCU initialized.';
   }
 }
+
 // ============================================================
 // UI EVENTS
 // ============================================================
+
 function attachUIEvents() {
-  const gearSelectorToggle =
-    document.getElementById('gear-selector-toggle');
-
-  const gearSelectorContent =
-    document.getElementById('gear-selector-content');
-
-  const gearSelectorArrow =
-    document.getElementById('gear-selector-arrow');
-
-  gearSelectorToggle?.addEventListener(
-    'click',
-    () => {
-      const hidden =
-        gearSelectorContent.classList.toggle('hidden');
-
-      gearSelectorArrow.textContent =
-        hidden ? '▶' : '▼';
-    }
-  );
-
   dom.gearButtons.forEach(
     (button) => {
       button.addEventListener(
         'click',
         () => {
           startEngineAudio();
+
           requestGear(
             button.dataset.gear
           );
@@ -2072,43 +2234,54 @@ function attachUIEvents() {
       );
     }
   );
+
   dom.rpmSlider.addEventListener(
     'input',
     () => {
       startEngineAudio();
+
       state.engineRPM =
         Number(
           dom.rpmSlider.value
         );
     }
   );
+
   dom.clutchButton.addEventListener(
     'click',
     () => {
       startEngineAudio();
+
       toggleClutch();
     }
   );
+
   dom.pauseButton.addEventListener(
     'click',
     () => {
       startEngineAudio();
+
       togglePause();
     }
   );
+
   dom.resetButton.addEventListener(
     'click',
     () => {
       startEngineAudio();
+
       resetSimulation();
     }
   );
+
   window.addEventListener(
     'keydown',
     (event) => {
       startEngineAudio();
+
       const key =
         event.key.toUpperCase();
+
       if (
         [
           'N',
@@ -2129,43 +2302,54 @@ function attachUIEvents() {
         event.code === 'Space'
       ) {
         event.preventDefault();
+
         togglePause();
       }
     }
   );
+
   // Shift-by-wire mode
   dom.sbwMode?.addEventListener(
     'change',
     () => {
       sbwState.mode =
         dom.sbwMode.value;
+
       if (
         sbwState.mode ===
         'MECHANICAL'
       ) {
         sbwState.tcuStatus =
           'BYPASSED';
+
         sbwState.communication =
           'N/A';
+
         sbwState.security =
           'NORMAL';
+
         sbwLog(
           'CONTROL MODE: MECHANICAL — TCU BYPASSED'
         );
       } else {
         sbwState.tcuStatus =
           'ONLINE';
+
         sbwState.communication =
           'OK';
+
         sbwState.security =
           'NORMAL';
+
         sbwLog(
           'CONTROL MODE: SHIFT-BY-WIRE — TCU ONLINE'
         );
       }
+
       updateUI();
     }
   );
+
   // Cybersecurity fault injection
   dom.faultButtons.forEach(
     (button) => {
@@ -2179,6 +2363,7 @@ function attachUIEvents() {
       );
     }
   );
+
   dom.clearFaultButton?.addEventListener(
     'click',
     () => {
@@ -2186,200 +2371,179 @@ function attachUIEvents() {
     }
   );
 }
-// ============================================================
-// CLUTCH
-// ============================================================
+
 function toggleClutch() {
   state.clutchEngaged =
     !state.clutchEngaged;
+
   playSound(
     'clutch'
   );
+
   updatePhysics();
   updateUI();
 }
-// ============================================================
-// PAUSE
-// ============================================================
+
 function togglePause() {
   state.paused =
     !state.paused;
+
   dom.pauseButton.textContent =
     state.paused
       ? 'PLAY'
       : 'PAUSE';
+
   updateUI();
 }
-// ============================================================
-// RESET
-// ============================================================
+
 function resetSimulation() {
-  state.gear =
-    'N';
-  state.targetGear =
-    'N';
+  state.gear = 'N';
+
+  state.targetGear = 'N';
+
   state.engineRPM =
     INITIAL_RPM;
+
   state.clutchEngaged =
     true;
+
   state.paused =
     false;
+
   state.shifting =
     false;
+
   state.shiftElapsed =
     0;
+
   state.torqueBlend =
     1;
+
   dom.rpmSlider.value =
     INITIAL_RPM;
+
   dom.pauseButton.textContent =
     'PAUSE';
+
   resetSelectorPositions();
-  resetSBWVisualState();
+
   // Reset TCU / shift-by-wire state
   sbwState.sequence += 1;
+
   sbwState.mode =
     'SBW';
+
   sbwState.tcuStatus =
     'ONLINE';
+
   sbwState.requestedGear =
     'N';
+
   sbwState.receivedGear =
     'N';
+
   sbwState.validatedGear =
     'N';
+
   sbwState.actualGear =
     'N';
+
   sbwState.communication =
     'OK';
+
   sbwState.security =
     'NORMAL';
+
   sbwState.activeFault =
     'NONE';
+
   sbwState.eventLog =
     [];
+
   sbwLog(
     'TCU reset — system initialized'
   );
+
   if (dom.sbwMode) {
     dom.sbwMode.value =
       'SBW';
   }
+
   updateHighlighting();
   updatePhysics();
   updateUI();
 }
+
 // ============================================================
 // SOUND ARCHITECTURE
 // ============================================================
+
 const soundFiles = {
   engine:
     './sounds/engine_loop.mp3',
+
   clutch:
     './sounds/clutch.mp3',
+
   gearShift:
     './sounds/gear_shift.mp3',
+
   reverse:
-    './sounds/reverse.mp3',
-  neutral:
-    './sounds/neutral.mp3',
-  gear1:
-    './sounds/gear1.mp3',
-  gear2:
-    './sounds/gear2.mp3',
-  gear3:
-    './sounds/gear3.mp3',
-  gear4:
-    './sounds/gear4.mp3',
-  gear5:
-    './sounds/gear5.mp3'
+    './sounds/reverse.mp3'
 };
+
 const soundState = {
   initialized: false,
+
   engine: null,
+
   clutch: null,
+
   gearShift: null,
-  reverse: null,
-  gears: {},
-  activeDriveSound: null
+
+  reverse: null
 };
+
 function initAudio() {
   if (
     soundState.initialized
   ) {
     return;
   }
+
   try {
     soundState.engine =
       new Audio(
         soundFiles.engine
       );
+
     soundState.engine.loop =
       true;
+
     soundState.engine.preload =
       'auto';
+
     soundState.engine.volume =
       0.45;
+
     soundState.engine.playbackRate =
       0.65;
+
     soundState.clutch =
       new Audio(
         soundFiles.clutch
       );
+
     soundState.gearShift =
       new Audio(
         soundFiles.gearShift
       );
+
     soundState.reverse =
       new Audio(
         soundFiles.reverse
       );
-    soundState.gears = {
-      N:
-        new Audio(
-          soundFiles.neutral
-        ),
-      1:
-        new Audio(
-          soundFiles.gear1
-        ),
-      2:
-        new Audio(
-          soundFiles.gear2
-        ),
-      3:
-        new Audio(
-          soundFiles.gear3
-        ),
-      4:
-        new Audio(
-          soundFiles.gear4
-        ),
-      5:
-        new Audio(
-          soundFiles.gear5
-        ),
-      R:
-        soundState.reverse
-    };
-    for (
-      const sound of
-      Object.values(
-        soundState.gears
-      )
-    ) {
-      if (!sound) {
-        continue;
-      }
-      sound.loop =
-        true;
-      sound.preload =
-        'auto';
-      sound.volume =
-        0;
-      sound.playbackRate =
-        0.75;
-    }
+
     soundState.initialized =
       true;
   } catch (error) {
@@ -2389,15 +2553,19 @@ function initAudio() {
     );
   }
 }
+
 function startEngineAudio() {
   initAudio();
+
   if (
     !soundState.engine
   ) {
     return;
   }
+
   const promise =
     soundState.engine.play();
+
   if (promise) {
     promise.catch(
       () => {
@@ -2406,12 +2574,15 @@ function startEngineAudio() {
     );
   }
 }
+
 function updateEngineSound() {
   if (
-    !soundState.initialized
+    !soundState.initialized ||
+    !soundState.engine
   ) {
     return;
   }
+
   const rpmNormalized =
     THREE.MathUtils.clamp(
       (
@@ -2425,61 +2596,58 @@ function updateEngineSound() {
       0,
       1
     );
-  /**
-   * ENGINE LOOP
-   *
-   * The engine loop is now ALWAYS
-   * the base sound while the simulator
-   * is running.
-   */
- if (
-  soundState.engine
-) {
-  const engineTargetRate =
+
+  // RPM -> engine pitch.
+  const targetPlaybackRate =
     THREE.MathUtils.lerp(
       0.65,
-      1.55,
+      1.85,
       rpmNormalized
     );
+
+  // Smooth pitch changes.
   soundState.engine.playbackRate +=
     (
-      engineTargetRate -
+      targetPlaybackRate -
       soundState.engine.playbackRate
     ) * 0.10;
-  let engineTargetVolume =
+
+  // RPM -> volume.
+  let targetVolume =
     THREE.MathUtils.lerp(
-      0.04,
-      0.18,
+      0.20,
+      0.65,
       rpmNormalized
     );
+
   if (
     state.paused
   ) {
-    engineTargetVolume =
-      0;
+    targetVolume = 0;
   }
+
   if (
     !state.clutchEngaged &&
     !state.paused
   ) {
-    engineTargetVolume *=
-      0.75;
+    targetVolume *= 0.75;
   }
+
   soundState.engine.volume +=
     (
-      engineTargetVolume -
+      targetVolume -
       soundState.engine.volume
     ) * 0.10;
+
   if (
     !state.paused &&
     soundState.engine.paused
   ) {
     soundState.engine
       .play()
-      .catch(
-        () => {}
-      );
+      .catch(() => {});
   }
+
   if (
     state.paused &&
     !soundState.engine.paused
@@ -2487,124 +2655,13 @@ function updateEngineSound() {
     soundState.engine.pause();
   }
 }
-  /**
-   * GEAR-SPECIFIC SOUND
-   *
-   * These sounds are layered on top
-   * of the engine loop.
-   */
-  const gear =
-    Object.prototype.hasOwnProperty.call(
-      soundState.gears,
-      state.gear
-    )
-      ? state.gear
-      : 'N';
-  const targetSound =
-    soundState.gears[gear];
-  if (!targetSound) {
-    return;
-  }
-  if (
-    soundState.activeDriveSound !==
-    targetSound
-  ) {
-    if (
-      soundState.activeDriveSound
-    ) {
-      soundState.activeDriveSound.pause();
-      soundState.activeDriveSound.currentTime =
-        0;
-      soundState.activeDriveSound.volume =
-        0;
-    }
-    soundState.activeDriveSound =
-      targetSound;
-    targetSound.currentTime =
-      0;
-  }
-  const baseRates = {
-    N: 0.70,
-    1: 0.72,
-    2: 0.78,
-    3: 0.84,
-    4: 0.90,
-    5: 0.96,
-    R: 0.76
-  };
-  const baseRate =
-    baseRates[gear] ??
-    0.75;
-  const targetPlaybackRate =
-    THREE.MathUtils.lerp(
-      baseRate,
-      baseRate + 0.80,
-      rpmNormalized
-    );
-  targetSound.playbackRate +=
-    (
-      targetPlaybackRate -
-      targetSound.playbackRate
-    ) * 0.10;
-  /**
-   * Gear-specific sound is quieter
-   * because engine_loop is the main sound.
-   */
-  let targetVolume =
-    THREE.MathUtils.lerp(
-      0.05,
-      0.38,
-      rpmNormalized
-    );
-  if (
-    gear === 'R'
-  ) {
-    targetVolume =
-      THREE.MathUtils.lerp(
-        0.12,
-        0.48,
-        rpmNormalized
-      );
-  }
-  if (
-    state.paused
-  ) {
-    targetVolume =
-      0;
-  }
-  if (
-    !state.clutchEngaged &&
-    !state.paused
-  ) {
-    targetVolume *=
-      0.65;
-  }
-  targetSound.volume +=
-    (
-      targetVolume -
-      targetSound.volume
-    ) * 0.10;
-  if (
-    !state.paused &&
-    targetSound.paused
-  ) {
-    targetSound
-      .play()
-      .catch(
-        () => {}
-      );
-  }
-  if (
-    state.paused &&
-    !targetSound.paused
-  ) {
-    targetSound.pause();
-  }
-}
+
 function playSound(type) {
   try {
     initAudio();
+
     let sound = null;
+
     if (
       type === 'clutch'
     ) {
@@ -2619,13 +2676,17 @@ function playSound(type) {
       sound =
         soundState.gearShift;
     }
+
     if (!sound) {
       return;
     }
+
     sound.currentTime =
       0;
+
     sound.volume =
       0.55;
+
     sound.play().catch(
       () => {
         // Browser may block until interaction.
@@ -2638,76 +2699,101 @@ function playSound(type) {
     );
   }
 }
+
 // Browser audio needs a user gesture.
 window.addEventListener(
   'pointerdown',
   startEngineAudio,
   { once: true }
 );
+
 window.addEventListener(
   'keydown',
   startEngineAudio,
   { once: true }
 );
+
 // ============================================================
 // MAIN LOOP
 // ============================================================
+
 function animate() {
   requestAnimationFrame(
     animate
   );
+
   const delta =
     Math.min(
       clock.getDelta(),
       0.05
     );
-  if (
-    !state.paused
-  ) {
+
+  if (!state.paused) {
     updatePhysics();
+
     updateGearRotation(
       delta
     );
+
     updateShiftAnimation(
       delta
     );
+
     updatePowerFlow(
       delta
     );
+
     updateUI();
   }
+
   // Engine sound must update even when paused
   // so the volume fades correctly.
   updateEngineSound();
+
   controls.update();
+
   updateUI();
+
   renderer.render(
     scene,
     camera
   );
 }
+
 // ============================================================
 // BOOT
 // ============================================================
+
 async function boot() {
   cacheDom();
+
   initThree();
+
   attachUIEvents();
+
   try {
     await loadModel();
+
     resetSelectorPositions();
+
     updatePhysics();
+
     updateHighlighting();
+
     updateUI();
+
     animate();
   } catch (error) {
     console.error(error);
+
     dom.loading.classList.add(
       'hidden'
     );
+
     dom.error.classList.remove(
       'hidden'
     );
+
     dom.errorDetail.textContent =
       String(
         error?.message ||
@@ -2715,4 +2801,5 @@ async function boot() {
       );
   }
 }
+
 boot();
